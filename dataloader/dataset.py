@@ -4,13 +4,14 @@ from torchvision import transforms
 from PIL import Image
 import random
 class Dataset (torch.utils.data.Dataset):
-	def __init__(self, image_glob, mask_glob):
+	def __init__(self, image_glob, mask_glob, RGBmask):
 		super().__init__()
 
 		self.imagePaths = self.GetImagePaths(image_glob)
 		self.maskPaths = self.GetMaskPaths(mask_glob)
 		self.maskCount = len(self.maskPaths)
 		self.imageCount = len(self.imagePaths)
+		self.RGBmask = RGBmask
 
 		self.toTensorTransform = transforms.ToTensor()
 
@@ -30,6 +31,6 @@ class Dataset (torch.utils.data.Dataset):
 
 		mask = Image.open(self.maskPaths[random.randint(0, self.maskCount - 1)])
 		#mask = self.mask_transform(mask.convert('RGB'))
-		mask = self.toTensorTransform(mask.convert("RGB"))
+		mask = self.toTensorTransform(mask.convert("RGB") if self.RGBmask else mask)
 
 		return mask, gt_img #gt_img * mask

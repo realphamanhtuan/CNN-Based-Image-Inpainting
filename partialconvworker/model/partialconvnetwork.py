@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from partialconvworker.models.partialconvlayer import PartialConvLayer
+from partialconvworker.model.partialconvlayer import PartialConvLayer
 
 class PartialConvUNet(nn.Module):
 

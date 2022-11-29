@@ -15,8 +15,8 @@ from tqdm import tqdm
 
 from lib.worker import VanisherWorker
 from torch.utils import data
-from partialconvworker.models.partialconvnetwork import PartialConvUNet
-from partialconvworker.models.loss import Loss
+from partialconvworker.model.partialconvnetwork import PartialConvUNet
+from partialconvworker.model.loss import Loss
 
 # reverses the earlier normalization applied to the image to prepare output
 def unnormalize(x):
@@ -47,7 +47,9 @@ class PartialConvWorker(VanisherWorker):
 		self.device = torch.device(devstring)
 		self.imageNormalizingTransform = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
-		self.model = PartialConvUNet()
+		self.model = PartialConvUNet().to(self.device)
+
+		print("Setup Adam optimizer...")
 		self.optimizer = torch.optim.Adam(filter(requires_grad, self.model.parameters()), lr=learning_rate)
 
 		self.checkpoint_path = checkpoint_path
@@ -56,8 +58,6 @@ class PartialConvWorker(VanisherWorker):
 			checkpoint_dict = torch.load(checkpoint_path, map_location=devstring)
 			self.model.load_state_dict(checkpoint_dict["model"])
 			self.optimizer.load_state_dict(checkpoint_dict["optimizer"])
-
-		self.model = self.model.to(self.device)
 	
 	def Compute(self, gt_path, mask_path, out_path):
 		self.model.eval()
@@ -93,9 +93,7 @@ class PartialConvWorker(VanisherWorker):
 		except:
 			return False
 	
-	def Train(self, epochCount, batch_size, data_train, data_test, log_interval):
-		print("Setup Adam optimizer...")
-
+	def Train(self, epochCount, train_batch_size, test_batch_size, data_train, data_test, log_interval):
 		loss_func = Loss().to(self.device);
 
 		self.model.freeze_enc_bn = True
@@ -103,11 +101,11 @@ class PartialConvWorker(VanisherWorker):
 		test_size = len(data_test)
 		print("Loaded training dataset with {} train samples, {} test samples, and {} masks".format(train_size, test_size, data_train.maskCount))
 
-		train_iters = train_size // batch_size
-		test_iters = test_size // batch_size
+		train_iters = train_size // train_batch_size
+		test_iters = test_size // train_batch_size
 		
 		for epoch in range(0, epochCount):
-			iterator_train = iter(data.DataLoader(data_train, batch_size=batch_size, num_workers=1, sampler=SubsetSampler(0, train_size)))
+			iterator_train = iter(data.DataLoader(data_train, batch_size=train_batch_size, num_workers=1, sampler=SubsetSampler(0, train_size)))
 
 			# TRAINING LOOP
 			print("\nEPOCH:{} of {} - starting training loop from iteration:0 to iteration:{}\n".format(epoch, epochCount, train_iters))
@@ -158,7 +156,7 @@ class PartialConvWorker(VanisherWorker):
 			del state
 
 			print ("Testing after epoch", epoch)
-			iterator_test = iter(data.DataLoader(data_test, batch_size=4, num_workers=1, sampler=SubsetSampler(0, train_size)))
+			iterator_test = iter(data.DataLoader(data_test, batch_size=test_batch_size, num_workers=1, sampler=SubsetSampler(0, train_size)))
 			test_losses = {}
 			for i in tqdm(range(0, test_iters)):
 				torch.cuda.empty_cache()
@@ -172,7 +170,8 @@ class PartialConvWorker(VanisherWorker):
 				image = gt * mask
 				
 				# Forward-propagates images through net
-				# Mask is also propagated, though it is usually gone by the decoding stage
+				# Mask is also propa
+				# gated, though it is usually gone by the decoding stage
 				output = self.model(image, mask)
 
 				loss_dict = loss_func(image, mask, output, gt)
